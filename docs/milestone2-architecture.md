@@ -441,7 +441,7 @@ All language models run behind one vLLM server, with the LoRA adapters loaded si
 | Parser | **Docling**; PaddleOCR-VL-1.6 for scans | MinerU2.5 | Docling is the safe default for digital files; PaddleOCR-VL-1.6 leads OmniDocBench v1.6 (96.34) at 0.9B |
 | Guardrails | **Shieldstral 1.0 (3B)** | GPT-OSS-Safeguard-20B, Qwen3Guard-8B | Ties GPT-OSS-Safeguard-20B on text safety (84.9 F1) at a seventh of the size; policies written as questions; Apache 2.0 |
 | Forecasting | **Timestral-209M** | Chronos-2, TimesFM-3, seasonal naive | Mistral reports first place on GIFT-Eval, TIME and fev-bench; CPU inference; accepts past-only and known-future covariates, which the deck covariates need; 21 quantiles |
-| Card art | **Qwen-Image-2.1** (offline) | Qwen-Image-2512 | Top open-weights score on Qwen's own benchmark; research licence is fine for a class project |
+| Card art | **FLUX 3 Image Klein** (offline) | Qwen-Image-2.1 | 5.6B open weights (15 Oct 2026); INT8 build runs in about 8 GB VRAM; up to 10 reference images for a consistent style; free commercial use under $5M revenue. See §6.5 |
 | Judge (evaluation only) | **Qwen3.6-27B** | — | Open, Apache 2.0, not the model under test |
 
 ### 6.3 Fine-tuning recipe
@@ -470,7 +470,52 @@ flowchart LR
 - **No fine-tuning of Timestral.** It is used zero-shot. If time allows, the covariate extractor gets a small LoRA trained on D7 (where the true events are known), which is the cheaper half of the CoCo recipe.
 - **Fallbacks are explicit.** Under 12 months of KPIs, or a failed validation, the system uses the market forecast only and says so in the reading.
 
-### 6.5 On the watch list
+### 6.5 Card art
+
+The 78 card images are generated once, offline, and served as static files. Image generation is never on the request path, so it adds no latency, cost or risk to a reading.
+
+**Model comparison**
+
+| | FLUX 3 Image Klein (chosen) | Qwen-Image-2.1 |
+| --- | --- | --- |
+| Released | 15 Oct 2026 | 20 Sep 2026 |
+| Size | 5.6B generator (text encoders separate) | 7B generator + 8B text encoder |
+| Hardware | INT8 build in about 8 GB VRAM; the optional prompt upsampler needs about 28 GB more | About 30 GB in bf16; needs quantisation or offload on a 24 GB card |
+| Variants | Distilled (16 steps) for generation; undistilled Klein Base (50 steps) for LoRA training | One checkpoint (a Turbo version followed) |
+| Consistency tools | Up to 10 reference images; bounding-box placement | Up to 10 reference images; native RGBA |
+| Licence | FLUX Kommunity License: free commercial use under $5M annual revenue | Qwen Research License: non-commercial only |
+| Evidence | Vendor evaluations; 4th of 74 on typography and layout in one independent sample-based comparison | Vendor benchmark only |
+
+Klein wins on the two constraints that matter most here: it fits beside the rest of the stack on one consumer GPU, and its licence does not block later use. Its Base variant also lets us train a small style LoRA. Qwen-Image-2.1 stays as the comparison model.
+
+**Pipeline**
+
+```mermaid
+flowchart LR
+    A["Card spec table<br/>78 cards: symbolism, suit, number"] --> B["Prompt template<br/>our own wording"]
+    B --> C["Style anchor<br/>5 hand-picked cards"]
+    C --> D["FLUX 3 Image Klein<br/>reference images + fixed seed"]
+    D --> E["Shieldstral image policy"]
+    E -->|fail| D
+    E -->|pass| F["Team review"]
+    F -->|reject| D
+    F -->|accept| G["Static assets<br/>versioned in repo"]
+```
+
+1. **Card spec table.** One row per card with its traditional symbolism written in our own words, plus its suit and number. Prompts never name or imitate a specific published deck.
+2. **Style anchor.** Generate candidates for 5 cards, pick a style, then pass those 5 as reference images for every other card so the deck looks like one set. If references are not consistent enough, train a small LoRA on Klein Base from the approved cards.
+3. **Reproducible.** Each card's prompt, seed, model version and settings are saved with the image, so any card can be regenerated exactly.
+4. **No text in the image.** Card names, numbers and the "Reversed" label are drawn by the app, so they are always correct and translatable.
+5. **Reversed cards** reuse the upright image rotated 180°; no extra generation.
+6. **Screened.** Every image passes the Shieldstral image policy and a team review before it is committed.
+
+**Cost.** 78 cards with about 4 candidates each is roughly 300 generations: an afternoon on one consumer GPU with the distilled model. We skip the 28 GB prompt upsampler, since our prompts are already detailed.
+
+**Evaluation.** A small check rather than a benchmark: 3 team members rate each card for style consistency and whether it fits the card's meaning (1–5), and every card scoring below 3 is regenerated. In the user study, the cards are identical across participants, so art quality does not confound the result.
+
+**Dynamic motifs (stretch).** Klein's reference editing can add clause-specific details, such as the number of coins matching the preference multiple. Variants would be generated offline and cached by card and severity bucket, never at request time.
+
+### 6.6 On the watch list
 
 - **Qwen4** is expected in the first week of November 2026 (announced names: Max, Flash, Plus, 27B). None is in our size range, so it does not change the plan; we re-check for small variants in Week 7.
 - **LFM3** is five days old; E4 decides whether it earns the router role.
@@ -534,7 +579,7 @@ We assume Week 1 started on Monday 28 September 2026 and the winter holiday runs
 | **7** | Ingestion pipeline (Docling, chunking, Qdrant); synthetic generator v1; annotation guide v1; MCP server skeleton with 3 tools | Annotator pilot (5 filings, κ) | Ingest 100 filings; guide v1; κ pilot result |
 | **8** | Hybrid retrieval + reranker; G1/G2 annotation; regex + zero-shot extraction baselines | **E1** chunking; **E2** start | Retrieval eval report; baseline extraction scores |
 | **9** | LoRA A training round 1; rule engine and spread selection; all tools in MCP server; D7 company generator; cap-table and KPI templates + `load_company_data` | **E2** done; **E3** round 1 | Trained adapter; end-to-end CLI reading (no Composer); 500 synthetic companies |
-| **10** | Orchestrator + Extraction agents; Timestral market + runway forecast; payout simulation with cap table; D5 and D8 series | **E3** round 2 (LFM3); **E4** start; **E6** | Agentic reading via MCP with optional cap table and KPIs; market forecast backtest report |
+| **10** | Orchestrator + Extraction agents; Timestral market + runway forecast; payout simulation with cap table; D5 and D8 series; card art generated offline (style anchor + 78 cards) | **E3** round 2 (LFM3); **E4** start; **E6** | Agentic reading via MCP with optional cap table and KPIs; market forecast backtest report |
 | **11** | Composer (LoRA B) + Critic loop; Shieldstral policies; Tutor; simple web UI | **E4**, **E5**, **E7**; **E11** KPIs only; **E9** session 1 | Full reading in UI; safety report; runway forecast results; user study session 1 |
 | **12** | Feature freeze for core; stretch: deck covariates (`extract_context_covariates`); card art integrated; bug fixes; docs | **E8**; **E11** with covariates; **E9** delayed quiz | Tagged `v0.9`; all experiment reports; progress review |
 | — | Holiday: no new commitments | — | — |
@@ -567,6 +612,7 @@ gantt
     Forecast and E6               :e1, 2026-11-30, 14d
     E11 runway forecast           :e5, 2026-12-07, 14d
     Deck covariates stretch       :crit, e6, 2026-12-14, 7d
+    Card art generation           :e7, 2026-11-30, 7d
     Shieldstral and E7            :e2, 2026-12-07, 7d
     User study E9                 :e3, 2026-12-07, 14d
     Final locked-test run E10     :e4, 2027-01-04, 7d
@@ -606,6 +652,7 @@ gantt
 | "Knowledge graph" | Hand-built pattern ontology, no LLM-extracted GraphRAG | Our multi-hop needs are known in advance; cheaper and testable |
 | Golden set described loosely | Six sets (G1–G6) with schema, κ, versioning and a calibrated judge | Required for every experiment |
 | MCP server | Targets the stateless 2026-07-28 spec | Current specification revision |
+| Card art from Qwen-Image-2.1, one line | FLUX 3 Image Klein with its own section (§6.5) | Fits on a consumer GPU, permissive licence, Base variant for a style LoRA |
 | Term sheet is the only input; market-level forecast | Optional cap table and KPI sheet; deck covariates as stretch; company runway forecast | Clause risk depends on the company's trajectory; the TSFM + LLM-covariate pattern has the strongest published results |
 
 ---
@@ -622,6 +669,8 @@ Models
 - Shieldstral 1.0 model card: https://huggingface.co/mistralai/Shieldstral-1.0
 - Timestral: https://www.llmreference.com/model-family/timestral
 - OmniDocBench v1.6 and PDF parsers: https://devtoollab.com/blog/best-pdf-parsers-for-rag
+- FLUX 3 Image Klein (variants, licence, VRAM): https://www.layer3labs.io/guides/flux-3-image-explained
+- FLUX 3 Image Klein independent sample comparison: https://www.gradually.ai/en/ai-models/flux-3-image-klein/
 - Qwen-Image-2.1: https://datanorth.ai/news/qwen-releases-qwen-image-2-1
 - Qwen4 announcement: https://emergent.sh/news/alibaba-teases-qwen4-lineup-apsara-due-next
 
