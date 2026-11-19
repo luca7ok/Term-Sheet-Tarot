@@ -1,0 +1,57 @@
+<View>
+  <Labels name="label" toName="text">
+    <Label value="liquidation_preference" background="#e6550d"/>
+    <Label value="anti_dilution" background="#3182bd"/>
+    <Label value="board_composition" background="#31a354"/>
+    <Label value="drag_along" background="#756bb1"/>
+    <Label value="protective_provisions" background="#d6616b"/>
+  </Labels>
+  <Text name="text" value="$text" granularity="symbol"/>
+
+  <Number name="multiple" toName="text" perRegion="true" min="0.01" step="0.25" visibleWhen="region-selected" whenTagName="label" whenLabelValue="liquidation_preference"/>
+  <Choices name="participating" toName="text" perRegion="true" choice="single" visibleWhen="region-selected" whenTagName="label" whenLabelValue="liquidation_preference">
+    <Choice value="true"/>
+    <Choice value="false"/>
+  </Choices>
+  <Number name="cap" toName="text" perRegion="true" min="0.01" step="0.25" visibleWhen="region-selected" whenTagName="label" whenLabelValue="liquidation_preference"/>
+  <Choices name="seniority" toName="text" perRegion="true" choice="single" visibleWhen="region-selected" whenTagName="label" whenLabelValue="liquidation_preference">
+    <Choice value="senior"/>
+    <Choice value="pari_passu"/>
+    <Choice value="junior"/>
+  </Choices>
+  <Choices name="method" toName="text" perRegion="true" choice="single" visibleWhen="region-selected" whenTagName="label" whenLabelValue="anti_dilution">
+    <Choice value="broad_based_weighted_average"/>
+    <Choice value="narrow_based_weighted_average"/>
+    <Choice value="full_ratchet"/>
+    <Choice value="none"/>
+  </Choices>
+  <Choices name="pay_to_play" toName="text" perRegion="true" choice="single" visibleWhen="region-selected" whenTagName="label" whenLabelValue="anti_dilution">
+    <Choice value="true"/>
+    <Choice value="false"/>
+  </Choices>
+  <Number name="investor_seats" toName="text" perRegion="true" min="0" step="1" visibleWhen="region-selected" whenTagName="label" whenLabelValue="board_composition"/>
+  <Number name="common_seats" toName="text" perRegion="true" min="0" step="1" visibleWhen="region-selected" whenTagName="label" whenLabelValue="board_composition"/>
+  <Number name="independent_seats" toName="text" perRegion="true" min="0" step="1" visibleWhen="region-selected" whenTagName="label" whenLabelValue="board_composition"/>
+  <Choices name="trigger_holders" toName="text" perRegion="true" choice="multiple" visibleWhen="region-selected" whenTagName="label" whenLabelValue="drag_along">
+    <Choice value="board"/>
+    <Choice value="preferred_majority"/>
+    <Choice value="common_majority"/>
+  </Choices>
+  <Choices name="founder_carve_outs" toName="text" perRegion="true" choice="single" visibleWhen="region-selected" whenTagName="label" whenLabelValue="drag_along">
+    <Choice value="true"/>
+    <Choice value="false"/>
+  </Choices>
+  <Choices name="veto_matters" toName="text" perRegion="true" choice="multiple" visibleWhen="region-selected" whenTagName="label" whenLabelValue="protective_provisions">
+    <Choice value="amend_charter"/>
+    <Choice value="new_senior_security"/>
+    <Choice value="change_board_size"/>
+    <Choice value="dividends"/>
+    <Choice value="liquidation_or_sale"/>
+    <Choice value="debt_above_threshold"/>
+    <Choice value="redemption"/>
+  </Choices>
+  <Choices name="voting_threshold" toName="text" perRegion="true" choice="single" visibleWhen="region-selected" whenTagName="label" whenLabelValue="protective_provisions">
+    <Choice value="majority"/>
+    <Choice value="supermajority"/>
+  </Choices>
+</View>

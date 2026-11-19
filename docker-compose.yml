@@ -6,3 +6,9 @@ services:
       - "6334:6334"
     volumes:
       - ./.qdrant_storage:/qdrant/storage
+  label-studio:
+    image: heartexlabs/label-studio:1.23.2
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./.label_studio:/label-studio/data
