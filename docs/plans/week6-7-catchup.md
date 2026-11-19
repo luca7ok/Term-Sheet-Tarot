@@ -70,9 +70,9 @@ Data shape first. One Pydantic model per core clause type, joined as a discrimin
 
 ## U3. Parse and chunk documents
 
-**Model.** Sonnet. **Files.** `src/tarot/ingest/parse.py`, `src/tarot/ingest/chunk.py`, tests. **Adds.** `docling`, `tokenizers`.
+**Model.** Sonnet. **Files.** `src/tarot/ingest/parse.py`, `src/tarot/ingest/chunk.py`, tests. **Adds.** `tokenizers`. No Docling, per Appendix A.
 
-- [ ] `parse.py` turns a raw file into a `Document` plus its plain text and section headings with character offsets. Results are stored in SQLite at `data/tarot.db` and keyed by `document_id`, so a re-parse with an unchanged `content_hash` is skipped.
+- [ ] `parse.py` turns a raw `.htm` or `.txt` file into a `Document` plus its plain text and section headings with character offsets. HTML is stripped with the standard library. Headings come from one regex that requires a number, a capitalised title and a full stop, so cross-references do not match. Results are stored in SQLite at `data/tarot.db` and keyed by `document_id`, so a re-parse with an unchanged `content_hash` is skipped.
 - [ ] `chunk.py` produces `Chunk` objects for variants C0 (recursive 512 tokens), C1 (one chunk per clause, split at 512 tokens) and C2 (C1 plus the deterministic header from §4.2). Spans index into the parsed text, which the existing `Chunk` validator already enforces. Token counts use the embedding model's tokenizer.
 - [ ] Evidence. Tests cover a 1,500-token clause splitting into three chunks with contiguous spans. A run over three real exhibits prints chunk counts per variant and five sample C2 headers for the orchestrator to read.
 
@@ -80,7 +80,7 @@ C3 (LLM context) and C4 (late chunking) wait for E1 in Week 8.
 
 ## U4. Embed and index into Qdrant
 
-**Model.** Sonnet. **Files.** `src/tarot/ingest/index.py`, `src/tarot/ingest/__main__.py`, tests. **Adds.** `qdrant-client`, `sentence-transformers` (embeddings run locally).
+**Model.** Sonnet. **Files.** `src/tarot/ingest/index.py`, `src/tarot/ingest/__main__.py`, tests. **Adds.** `qdrant-client`, `sentence-transformers` (embeddings run locally on MPS, batch 16). CPU is about 30 times slower, so ingestion refuses to run bulk jobs without MPS or CUDA. The full 100-filing index is a one-off run of roughly an hour.
 
 - [ ] One collection per chunking variant, named `chunks_c0`, `chunks_c1`, `chunks_c2`. The point ID is the existing `chunk_id` UUID, so upserts are idempotent. The payload carries `document_id`, `section_path`, span, `content_hash` and the EDGAR metadata.
 - [ ] `python -m tarot.ingest data/raw/edgar` parses, chunks, embeds, upserts and writes a `Manifest` to `data/manifests/<snapshot_id>.json`.
@@ -92,14 +92,14 @@ Sparse vectors and fusion are Week 8. The collections can be rebuilt from SQLite
 
 **Model.** Haiku runs the commands. The orchestrator checks the output.
 
-- [ ] If U1 found drag-along or board composition rare, add voting-agreement exhibits to the crawler's queries first.
+- [ ] Tighten the crawler first, per Appendix A. Keep "Amended and Restated Certificate of Incorporation" exhibits that contain preferred-stock terms. Skip certificates of designations, certificates of amendment and "Form of" charters. Drop near-duplicate refilings from the same company. Add voting-agreement exhibits (often EX-10) so drag-along clauses exist.
 - [ ] Run `python -m tarot.ingest.crawler --limit 100` with the team's `SEC_USER_AGENT` from `.env`.
 - [ ] Run `python -m tarot.ingest data/raw/edgar`.
 - [ ] Evidence. `index.csv` has 100 rows, the Qdrant count matches the manifest, and the manifest is committed under `data/manifests/`.
 
 ## U6. Stand up the MCP server with three tools
 
-**Model.** Sonnet. **Files.** `src/tarot/mcp_server/server.py`, `tests/test_mcp_server.py`. **Adds.** the SDK chosen in U1.
+**Model.** Sonnet. **Files.** `src/tarot/mcp_server/server.py`, `tests/test_mcp_server.py`. **Adds.** `mcp>=2.3` with `MCPServer`, per Appendix A. Tests use the in-process client, no subprocess.
 
 - [ ] Tools are `ingest_document` (U3 and U4 on one file), `search_document` (dense search filtered to one `document_id`, hybrid arrives in Week 8) and `query_graph` (U2). Input and output schemas come from the existing Pydantic models.
 - [ ] Stateless, streamable HTTP and stdio, as in §5.5.
@@ -145,7 +145,23 @@ Labelling scheme in short. Pilot 5 filings double-annotated by hand. The other 2
 
 ## Appendix A. Spike results
 
-Filled by U1.
+Run 19 Nov 2026 on an Apple M4 with 16 GB RAM. Scripts stay in the session scratchpad, not the repo.
+
+**Docling (measured on 3 exhibits).** Docling found no usable headings. TomoTherapy gave 63 heading items with empty text, Barnes & Noble gave none, and `.txt` input is read as Markdown and turns indented `ARTICLE` lines into code blocks. A stdlib HTML strip plus a heading regex keeps run-in headings like "Section 1.5 Liquidation." but also matches cross-references at wrapped line starts, so the regex must require a number, a capitalised title and a full stop. Both take under 0.2 s per file. Decision for U3 is to drop Docling.
+
+**Embeddings (measured).** Qwen3-Embedding-0.6B on MPS embeds 100 chunks of about 350 tokens in a median 15.3 s (batch 8) or 15.4 s (batch 32), 1024 dimensions, 618 MB peak RSS. CPU is about 30 times slower (20 chunks in 98.6 s) and is not usable for bulk ingestion. Downloading from Hugging Face needs `HF_HUB_DISABLE_XET=1`, download timeouts and a retry. The `tokenizers` package alone loads the model's tokenizer without torch.
+
+**MCP SDK (measured).** `mcp` 2.3.0 ships `MCPServer` at `mcp.server.mcpserver` and lists protocol `2026-07-28`. One server answered the same tool calls over stdio and streamable HTTP (`stateless_http=True`, endpoint `/mcp`). A Pydantic return type produces `outputSchema` and `structured_content`. FastMCP is not needed.
+
+**Coverage of the first 20 crawled exhibits (measured, keyword counts).**
+
+| Kind | Count | Use for G1 |
+| --- | --- | --- |
+| Full pre-IPO VC charters | 8, including one duplicate pair | Yes |
+| Private-equity or spin-off preferred | 6 | Weak |
+| Certificates of designations or amendments | 6 | No |
+
+Liquidation terms appear in 20 files, anti-dilution in 13, board election in 12, protective provisions in 9 and drag-along in none. Three near-duplicate pairs come from S-1/A refilings of the same exhibit.
 
 ## Appendix B. Choices made and alternatives rejected
 
@@ -163,7 +179,8 @@ Filled by U1.
 
 | Risk | Unit | Watch |
 | --- | --- | --- |
-| Docling loses EDGAR heading structure | U3 | U1 spike decides between Docling structure and a heading regex |
+| Heading regex misses unusual charter layouts | U3 | Run it over all U5 filings and list files with fewer than 5 headings |
+| Bulk embedding on a 16 GB laptop | U4, U5 | MPS only, one run, cached. Try fp16 if it is too slow |
 | Drag-along and board seats missing from fetched exhibits | U5 | U1 coverage count. Widen the crawler to voting agreements |
 | Docling and torch make CI slow | U3, U4 | Cache the uv environment in CI. Skip model-loading tests in CI if they exceed two minutes |
 | MCP SDK v2 rough edges | U6 | FastMCP 4 fallback, decided in U1 |
