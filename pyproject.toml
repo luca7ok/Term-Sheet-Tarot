@@ -3,7 +3,9 @@ name = "term-sheet-tarot"
 version = "0.1.0"
 description = "Turns a venture term sheet into a grounded risk table and a three-card tarot reading."
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+    "pydantic>=2.14.3",
+]
 
 [dependency-groups]
 dev = ["pytest>=9.2", "ruff>=0.8"]
