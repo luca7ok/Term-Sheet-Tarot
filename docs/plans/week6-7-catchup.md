@@ -107,7 +107,7 @@ Sparse vectors and fusion are Week 8. The collections can be rebuilt from SQLite
 
 ## U7. Write the synthetic term sheet generator v1
 
-**Model.** Sonnet. **Files.** `scripts/generate_term_sheets.py`, `tests/test_generator.py`.
+**Model.** Sonnet. **Files.** `src/tarot/synthetic/` (`python -m tarot.synthetic`), `tests/test_synthetic.py`. Moved into the package so tests import it.
 
 - [ ] Samples attribute values per clause type from the U2 models, renders each clause from two or three hand-written phrasings per alternative, and writes `<id>.txt` plus `<id>.labels.json` to `data/synthetic/term_sheets/`. Labels are U2 instances, so they validate by construction.
 - [ ] Seeded. The same seed produces byte-identical output.
@@ -128,7 +128,7 @@ The paraphrase pass with an open model (D4 in §1.3) is v2, in Week 9 with LoRA 
 
 ## U9. Build the labelling accelerators
 
-**Model.** Sonnet. **Files.** `scripts/prelabel_headings.py`, `scripts/generate_g2_questions.py`, tests.
+**Model.** Sonnet. **Files.** `src/tarot/golden/prelabel.py`, `prelabel_recall.py`, `g2.py`, `tests/test_golden_accel.py`.
 
 - [ ] `prelabel_headings.py` matches the U2 `HEADINGS` table against each parsed filing and writes Label Studio pre-annotations (clause type and span, no attributes) for the 25 non-pilot filings only.
 - [ ] `generate_g2_questions.py` turns finished G1 labels into factoid and benchmark-comparison G2 rows, with the answer and supporting span taken from the human label. People write the multi-hop, precedent and unanswerable questions, about 100.
@@ -162,6 +162,23 @@ Run 19 Nov 2026 on an Apple M4 with 16 GB RAM. Scripts stay in the session scrat
 | Certificates of designations or amendments | 6 | No |
 
 Liquidation terms appear in 20 files, anti-dilution in 13, board election in 12, protective provisions in 9 and drag-along in none. Three near-duplicate pairs come from S-1/A refilings of the same exhibit.
+
+## Appendix A2. Status on 19 Nov 2026
+
+| Unit | Commit | Evidence |
+| --- | --- | --- |
+| U0 | `198411c`, `a552422` | `verify.sh` green, fails on a planted lint error, keeps the embed extra |
+| U1 | `7412a0d` | Appendix A |
+| U2 | `1d15441` | 10 ontology tests, multi-series pattern fix |
+| U3 | `23b079c`, `b72c7b6` | 20 real filings parsed and chunked, second run skips all 20 |
+| U4 | `0d7565d` | 3,531 chunks embedded in 12.7 min on MPS, rerun embeds 0 |
+| U5 | `4e7ba72` | 105 filings crawled (75 charters, 30 voting agreements, 89 rejected). Indexing into docker Qdrant in progress |
+| U6 | `172b099` | Live HTTP ingest and search against docker Qdrant, upload-dir guard |
+| U7 | `dbea974` | Seeded output byte-identical, 50-document distribution checked |
+| U8 | `2d8a1ea` | Label Studio up, config parsed by Label Studio, 5 + 25 filings selected |
+| U9 | `987620f` | 36 pre-labels on 25 filings, pilot refused |
+
+Open items. The κ pilot is human work. Heading pre-labels found only 1 anti-dilution region in 25 filings because the heading regex ignores lettered sub-headings such as "(e) Adjustments to Conversion Price", which also limits C1 chunking. Extending the regex is a Week 8 task alongside E1, followed by a `PARSER_VERSION` bump and a re-index.
 
 ## Appendix B. Choices made and alternatives rejected
 
