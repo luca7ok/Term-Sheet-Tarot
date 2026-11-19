@@ -15,3 +15,5 @@ build/
 .qdrant_storage/
 data/raw/
 data/interim/
+data/synthetic/
+data/tarot.db
