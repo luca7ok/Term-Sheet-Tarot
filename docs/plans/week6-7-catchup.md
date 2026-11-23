@@ -172,7 +172,7 @@ Liquidation terms appear in 20 files, anti-dilution in 13, board election in 12,
 | U2 | `1d15441` | 10 ontology tests, multi-series pattern fix |
 | U3 | `23b079c`, `b72c7b6` | 20 real filings parsed and chunked, second run skips all 20 |
 | U4 | `0d7565d` | 3,531 chunks embedded in 12.7 min on MPS, rerun embeds 0 |
-| U5 | `4e7ba72` | 105 filings crawled (75 charters, 30 voting agreements, 89 rejected). Indexing into docker Qdrant in progress |
+| U5 | `4e7ba72` | 105 filings crawled (75 charters, 30 voting agreements, 89 rejected). Indexed into docker Qdrant on 23 Nov: C2 7,108, C1 7,108, C0 5,125 points, each equal to its manifest in `data/manifests/` |
 | U6 | `172b099` | Live HTTP ingest and search against docker Qdrant, upload-dir guard |
 | U7 | `dbea974` | Seeded output byte-identical, 50-document distribution checked |
 | U8 | `2d8a1ea` | Label Studio up, config parsed by Label Studio, 5 + 25 filings selected |
