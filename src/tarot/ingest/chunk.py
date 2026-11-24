@@ -19,8 +19,15 @@ def qwen_token_counter() -> Callable[[str], int]:
 
 
 def _units(text, start, end, count, max_tokens, level=0):
-    if count(text[start:end]) <= max_tokens or level >= len(SEPARATORS):
+    if count(text[start:end].strip()) <= max_tokens:
         yield start, end
+        return
+    if level == len(SEPARATORS):
+        if end - start <= 1:
+            raise ValueError("one character exceeds the chunk token budget")
+        mid = (start + end) // 2
+        yield from _units(text, start, mid, count, max_tokens, level)
+        yield from _units(text, mid, end, count, max_tokens, level)
         return
     sep, pos = SEPARATORS[level], start
     while pos < end:
@@ -32,13 +39,14 @@ def _units(text, start, end, count, max_tokens, level=0):
 
 def _split(text, start, end, count, max_tokens) -> list[tuple[int, int]]:
     """Tile text[start:end] with pieces of at most max_tokens, preferring coarse separators."""
-    pieces, cur_start, cur_end, cur_tokens = [], start, start, 0
+    if max_tokens < 1:
+        raise ValueError("max_tokens must be positive")
+    pieces, cur_start, cur_end = [], start, start
     for s, e in _units(text, start, end, count, max_tokens):
-        n = count(text[s:e])  # shortcut: summed per-unit counts approximate the joined count
-        if cur_end > cur_start and cur_tokens + n > max_tokens:
+        if cur_end > cur_start and count(text[cur_start:e].strip()) > max_tokens:
             pieces.append((cur_start, cur_end))
-            cur_start, cur_tokens = s, 0
-        cur_end, cur_tokens = e, cur_tokens + n
+            cur_start = s
+        cur_end = e
     pieces.append((cur_start, cur_end))
     return pieces
 
@@ -74,7 +82,10 @@ def chunk(
                 stack.pop()
             stack.append((h.level, h.title))
             bounds.append((h.span.start, end, tuple(t for _, t in stack)))
-    doc_type = parsed.document.title or "Certificate of Incorporation"
+    doc_type = {
+        "charter": "Certificate of Incorporation",
+        "voting_agreement": "Voting Agreement",
+    }.get(parsed.document.kind, "Document")
     defined = _defined_terms(text) if variant == ChunkingVariant.C2 else set()
     chunks = []
     for start, end, path in bounds:

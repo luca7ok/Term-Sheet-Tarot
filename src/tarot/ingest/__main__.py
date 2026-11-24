@@ -40,6 +40,7 @@ def main() -> None:
             r["document_id"],
             DocumentSource.EDGAR,
             edgar[r["document_id"]],
+            kind=r.get("kind") or None,
         )[0]
         for r in rows
     ]
@@ -51,7 +52,7 @@ def main() -> None:
         start = time.monotonic()
         variant = ChunkingVariant(v)
         chunks = [c for d in docs for c in chunk(d, variant, count_tokens)]
-        new = index_chunks(client, chunks, embed, edgar)
+        new = index_chunks(client, chunks, embed, edgar, variant=variant, document_ids=edgar)
         in_index = client.count(
             f"chunks_{variant}",
             models.Filter(

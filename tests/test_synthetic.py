@@ -56,6 +56,7 @@ def test_labels_validate_and_match_text():
                     assert has(span, MULTIPLES[c.multiple])
                     assert ("participate" in span or "pro rata" in span) == c.participating
                     assert c.cap is None or f"{c.cap:g}x." in span
+                    assert c.cap is None or c.cap >= c.multiple
                 case ClauseType.anti_dilution:
                     assert has(span, STEMS[c.method])
                 case ClauseType.board_composition:

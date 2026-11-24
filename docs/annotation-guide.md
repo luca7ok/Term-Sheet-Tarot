@@ -79,10 +79,16 @@ The drag-along usually lives in the voting agreement, not the charter. A charter
 
 ## Install and open Label Studio
 
-1. Run `docker compose up -d label-studio` from the repo root.
+1. From the repo root, give the container user (UID 1001) ownership of the data directory before starting Label Studio:
+
+   ```sh
+   mkdir -p .label_studio
+   sudo chown 1001 .label_studio
+   docker compose up -d label-studio
+   ```
 2. Open http://localhost:8080.
 3. On first run, sign up with a local account. Use any address you like. Data stays in `.label_studio/` on your machine, which git ignores.
-4. Each annotator needs a separate project, so nobody sees the other's labels. Create a project named `g1-pilot-<yourname>`.
+4. Label independently. Use separate local instances with separate data directories, or a deployment that enforces project permissions. Separate projects on a shared Community Edition instance do not hide labels. Create a project named `g1-pilot-<yourname>`.
 5. Open Labeling Setup, choose Custom template, and paste `data/golden/g1_extraction/label_config.xml`.
 6. Generate the task file. Charters from the crawl live in `data/raw/edgar-v2`.
 

@@ -37,7 +37,7 @@ def test_c2_header_lists_defined_terms():
     )
     c = chunk(make(text), ChunkingVariant.C2, words)[-1]
     assert c.header == (
-        "Certificate of Incorporation › ARTICLE IV › Section 4.1 Liquidation"
+        "Document › ARTICLE IV › Section 4.1 Liquidation"
         ". Uses: Deemed Liquidation Event, Original Issue Price."
     )
 
@@ -57,3 +57,25 @@ def test_c3_rejected():
 
 def test_c1_without_headings_is_one_section():
     assert len(chunk(make("plain text"), ChunkingVariant.C1, words)) == 1
+
+
+def test_oversized_text_without_separators_preserves_offsets():
+    text = "0123456789" * 9
+    chunks = chunk(make(text), ChunkingVariant.C0, len, max_tokens=12)
+    assert "".join(c.text for c in chunks) == text
+    assert all(c.text == text[c.span.start : c.span.end] and len(c.text) <= 12 for c in chunks)
+
+
+def test_c2_uses_document_kind(tmp_path):
+    from tarot.ingest.parse import Store, parse_and_store
+
+    path = tmp_path / "agreement.txt"
+    path.write_text("Some terms")
+    store = Store(tmp_path / "store.db")
+    parse_and_store(store, path, "d", DocumentSource.UPLOAD)
+    parsed, skipped = parse_and_store(
+        store, path, "d", DocumentSource.UPLOAD, kind="voting_agreement"
+    )
+    assert not skipped
+    assert chunk(parsed, ChunkingVariant.C2, words)[0].header == "Voting Agreement."
+    assert store.get("d").document.kind == "voting_agreement"

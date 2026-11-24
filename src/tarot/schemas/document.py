@@ -38,6 +38,7 @@ class Document(TarotModel):
     file_type: FileType
     content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     title: str | None = None
+    kind: str | None = None
     edgar: EdgarMetadata | None = None
 
     @model_validator(mode="after")

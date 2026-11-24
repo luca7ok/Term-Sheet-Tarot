@@ -95,3 +95,19 @@ def test_to_tasks(tmp_path):
     assert to_tasks([parse_file(f, "d", DocumentSource.UPLOAD)]) == [
         {"data": {"document_id": "d", "text": "hello"}}
     ]
+
+
+def test_kappa_rejects_different_text_even_when_lengths_match():
+    with pytest.raises(ValueError, match="d:.*different text"):
+        kappa([task("d", "one")], [task("d", "two")])
+
+
+@pytest.mark.parametrize("annotations", [[], [{"was_cancelled": True, "result": []}]])
+def test_unsubmitted_tasks_are_rejected(annotations):
+    unfinished = {**task("d", TEXT), "annotations": annotations}
+    with pytest.raises(ValueError, match="d: no submitted annotation"):
+        from_export([unfinished])
+    with pytest.raises(ValueError, match="d: no submitted annotation"):
+        kappa([unfinished], [task("d", TEXT)])
+    assert from_export([task("d", TEXT)]) == {"d": []}
+    assert kappa([task("d", TEXT)], [task("d", TEXT)])["overall"] == 1.0

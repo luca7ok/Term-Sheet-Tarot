@@ -86,3 +86,23 @@ def test_recall_hand_example():
     assert res[LP.value] == (1.0, 0.5)
     assert res["anti_dilution"] == (0.0, 0.0)
     assert res["all"] == (0.5, pytest.approx(1 / 3))
+
+
+def test_g2_skips_conflicting_factoids_but_preserves_unambiguous_ones(caplog):
+    from tarot.golden.labelstudio import from_export
+
+    gold = from_export(
+        [
+            task(
+                "d",
+                "x" * 20,
+                (0, 10, LP, {"multiple": 1, "participating": False}),
+                (10, 20, LP, {"multiple": 2, "participating": False}),
+            )
+        ]
+    )
+    rows = g2.generate(gold, "v", "s")
+    factoids = [r for r in rows if r["question_type"] == "factoid"]
+    assert {r["question"] for r in factoids} == {"Is the liquidation preference participating?"}
+    assert {r["expected_answer"] for r in factoids} == {"No, non-participating."}
+    assert "review manually" in caplog.text

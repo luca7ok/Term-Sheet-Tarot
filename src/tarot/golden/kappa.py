@@ -37,7 +37,10 @@ def kappa(export_a: list[dict], export_b: list[dict]) -> dict:
         raise ValueError(f"annotators labelled different documents: {sorted(a.keys() ^ b.keys())}")
     pairs: Counter = Counter()
     for doc, (text, ra) in a.items():
-        pairs.update(zip(_chars(text, ra), _chars(text, b[doc][1]), strict=True))
+        other_text, rb = b[doc]
+        if text != other_text:
+            raise ValueError(f"{doc}: annotator exports contain different text")
+        pairs.update(zip(_chars(text, ra), _chars(text, rb), strict=True))
     per_type = {}
     for t in ClauseType:
         one_vs_rest = Counter()

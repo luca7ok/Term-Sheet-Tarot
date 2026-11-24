@@ -1,10 +1,14 @@
 import argparse
 import json
+import logging
+from collections import defaultdict
 from collections.abc import Callable
 from pathlib import Path
 
 from tarot.golden.labelstudio import GoldClause, from_export
 from tarot.ontology.clauses import BENCHMARK, ClauseType
+
+log = logging.getLogger(__name__)
 
 yn = lambda b: "Yes" if b else "No"  # noqa: E731
 names = lambda vs: ", ".join(sorted(str(v).replace("_", " ") for v in vs))  # noqa: E731
@@ -90,8 +94,18 @@ def generate(
 ) -> list[dict]:
     rows = []
     for doc in sorted(gold):
-        for g in sorted(gold[doc], key=lambda x: (x.span.start, x.span.end)):
-            qa = [("factoid", q, f(g.clause)) for q, f in FACTOID[g.clause.clause_type]]
+        ordered = sorted(gold[doc], key=lambda x: (x.span.start, x.span.end))
+        factoids = [[(q, f(g.clause)) for q, f in FACTOID[g.clause.clause_type]] for g in ordered]
+        answers: dict[str, set[str]] = defaultdict(set)
+        for questions in factoids:
+            for question, answer in questions:
+                answers[question].add(answer)
+        # G1 records attributes and offsets but has no structured series scope.
+        for question, choices in answers.items():
+            if len(choices) > 1:
+                log.warning("%s: conflicting answers for %r; review manually", doc, question)
+        for g, questions in zip(ordered, factoids, strict=True):
+            qa = [("factoid", q, answer) for q, answer in questions if len(answers[q]) == 1]
             qa.append(("benchmark", *_benchmark(g)))
             for kind, q, answer in qa:
                 rows.append(

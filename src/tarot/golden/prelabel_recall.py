@@ -35,7 +35,9 @@ def main(argv: list[str] | None = None) -> None:
     a = p.parse_args(argv)
     files = {f.stem: f for f in Path(a.raw_dir).iterdir() if f.suffix in (".htm", ".html", ".txt")}
     gold, pre = [], []
-    for doc, (text, regions) in spans(json.loads(Path(a.gold_export).read_text())).items():
+    for doc, (text, regions) in spans(
+        json.loads(Path(a.gold_export).read_text(encoding="utf-8"))
+    ).items():
         parsed = parse_file(files[doc], doc, DocumentSource.UPLOAD)
         if parsed.text != text:
             raise SystemExit(f"{doc}: parsed text differs from the export text, offsets invalid")

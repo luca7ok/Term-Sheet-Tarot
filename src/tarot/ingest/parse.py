@@ -19,8 +19,24 @@ from tarot.schemas import (
 )
 
 DB_PATH = Path("data/tarot.db")
-PARSER_VERSION = "stdlib-regex-1"  # bump when parsing output changes, forces a re-parse
-BLOCK_TAGS = {"p", "div", "br", "tr", "li", "table", "center", "h1", "h2", "h3", "h4", "h5", "h6"}
+PARSER_VERSION = "stdlib-regex-2"  # bump when parsing output changes, forces a re-parse
+BLOCK_TAGS = {
+    "p",
+    "div",
+    "br",
+    "tr",
+    "td",
+    "th",
+    "li",
+    "table",
+    "center",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+}
 # Article lines carry only a number (title may follow on the next line); sections need a
 # capitalised title and a full stop so "pursuant to Section 4.2 hereof" does not match.
 HEADING_RE = re.compile(
@@ -89,7 +105,12 @@ def find_headings(text: str) -> tuple[Heading, ...]:
 
 
 def parse_file(
-    path: Path, document_id: str, source: DocumentSource, edgar: EdgarMetadata | None = None
+    path: Path,
+    document_id: str,
+    source: DocumentSource,
+    edgar: EdgarMetadata | None = None,
+    *,
+    kind: str | None = None,
 ) -> ParsedDocument:
     raw = Path(path).read_bytes()
     html = Path(path).suffix.lower() in (".htm", ".html")
@@ -108,6 +129,7 @@ def parse_file(
         file_type=FileType.HTML if html else FileType.TXT,
         content_hash=sha256_hex(raw),
         edgar=edgar,
+        kind=kind,
     )
     return ParsedDocument(document=doc, text=text, headings=find_headings(text))
 
@@ -156,11 +178,17 @@ def parse_and_store(
     document_id: str,
     source: DocumentSource,
     edgar: EdgarMetadata | None = None,
+    *,
+    kind: str | None = None,
 ) -> tuple[ParsedDocument, bool]:
     """Returns (parsed, skipped)."""
     cached = store.get(document_id)
-    if cached and cached.document.content_hash == sha256_hex(Path(path).read_bytes()):
+    if (
+        cached
+        and cached.document.kind == kind
+        and cached.document.content_hash == sha256_hex(Path(path).read_bytes())
+    ):
         return cached, True
-    parsed = parse_file(path, document_id, source, edgar)
+    parsed = parse_file(path, document_id, source, edgar, kind=kind)
     store.put(parsed)
     return parsed, False

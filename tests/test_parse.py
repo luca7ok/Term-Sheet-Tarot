@@ -52,3 +52,12 @@ def test_cp1252_bytes_decode(tmp_path):
     f = tmp_path / "old.txt"
     f.write_bytes("Section 1.1 Dividends. the “Holder”".encode("cp1252"))
     assert "“Holder”" in parse_file(f, "d1", DocumentSource.SYNTHETIC).text
+
+
+def test_adjacent_html_cells_are_separated(tmp_path):
+    path = tmp_path / "table.html"
+    path.write_text(
+        "<table><tr><th>Series</th><th>Amount</th></tr><tr><td>A</td><td>1x</td></tr></table>"
+    )
+    parsed = parse_file(path, "d", DocumentSource.UPLOAD)
+    assert parsed.text.split() == ["Series", "Amount", "A", "1x"]

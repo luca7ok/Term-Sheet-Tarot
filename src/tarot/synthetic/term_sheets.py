@@ -109,11 +109,11 @@ def sample(rng: random.Random, t: ClauseType) -> Clause:
         return BENCHMARK[t]
     match t:
         case ClauseType.liquidation_preference:
+            multiple = rng.choice(list(MULTIPLE))
             part = rng.random() < 0.5
-            cap = rng.choice((None, 2, 3)) if part else None
-            return LiquidationPreference(
-                multiple=rng.choice(list(MULTIPLE)), participating=part, cap=cap
-            )
+            caps = [None, *(cap for cap in (2, 3) if cap >= multiple)]
+            cap = rng.choice(caps) if part else None
+            return LiquidationPreference(multiple=multiple, participating=part, cap=cap)
         case ClauseType.anti_dilution:
             return AntiDilution(
                 method=rng.choice(list(AntiDilutionMethod)), pay_to_play=rng.random() < 0.5

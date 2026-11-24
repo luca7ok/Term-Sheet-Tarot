@@ -40,8 +40,10 @@ def to_tasks(parsed_docs: list[ParsedDocument]) -> list[dict]:
 def _regions(task: dict) -> dict[str, dict]:
     """Group one annotation's results by region id. Raises on a region without a clause label."""
     anns = [a for a in task.get("annotations", []) if not a.get("was_cancelled")]
+    if not anns:
+        raise ValueError(f"{task['data']['document_id']}: no submitted annotation")
     regions: dict[str, dict] = defaultdict(dict)
-    for r in anns[0]["result"] if anns else []:
+    for r in anns[0]["result"]:
         if r["type"] == "labels":
             v = r["value"]
             if len(v["labels"]) != 1:

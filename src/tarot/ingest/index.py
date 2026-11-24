@@ -1,8 +1,9 @@
-from collections.abc import Callable
+import json
+from collections.abc import Callable, Iterable
 
 from qdrant_client import QdrantClient, models
 
-from tarot.schemas import Chunk, ComponentVersion, EdgarMetadata
+from tarot.schemas import Chunk, ChunkingVariant, ComponentVersion, EdgarMetadata, sha256_hex
 
 Embedder = Callable[[list[str]], list[list[float]]]
 MODEL = "Qwen/Qwen3-Embedding-0.6B"
@@ -28,25 +29,61 @@ def qwen_embedder(batch_size: int = 16, allow_cpu: bool = False) -> Embedder:
     ).tolist()
 
 
+def _existing(client: QdrantClient, name: str, documents: set[str]) -> dict[str, str | None]:
+    if not client.collection_exists(name):
+        return {}
+    scope = models.Filter(
+        must=[
+            models.FieldCondition(key="document_id", match=models.MatchAny(any=sorted(documents)))
+        ]
+    )
+    have = {}
+    offset = None
+    while True:
+        points, offset = client.scroll(
+            name, scope, offset=offset, limit=256, with_payload=["embedding_fingerprint"]
+        )
+        have.update({str(p.id): (p.payload or {}).get("embedding_fingerprint") for p in points})
+        if offset is None:
+            return have
+
+
 def index_chunks(
     client: QdrantClient,
     chunks: list[Chunk],
     embed: Embedder,
     edgar: dict[str, EdgarMetadata],
+    *,
+    variant: ChunkingVariant | None = None,
+    document_ids: Iterable[str] = (),
+    embedding_model: ComponentVersion | None = None,
 ) -> int:
-    if not chunks:
+    """Index a complete chunk set for each supplied document, in one variant.
+
+    Pass document_ids and variant to also reconcile documents that produced no chunks.
+    """
+    if chunks and variant is None:
+        variant = chunks[0].variant
+    documents = set(document_ids) | {c.document_id for c in chunks}
+    if not documents:
         return 0
-    name = f"chunks_{chunks[0].variant}"
-    ids = [str(c.chunk_id) for c in chunks]
-    have = (
-        {str(p.id) for p in client.retrieve(name, ids, with_payload=False)}
-        if (client.collection_exists(name))
-        else set()
-    )
-    new = [c for c in chunks if str(c.chunk_id) not in have]
+    if variant is None or any(c.variant != variant for c in chunks):
+        raise ValueError("index_chunks requires one chunking variant")
+    name = f"chunks_{variant}"
+    model = EMBEDDING_MODEL if embedding_model is None else embedding_model
+    have = _existing(client, name, documents)
+    new = []
+    current_ids = set()
+    for c in chunks:
+        point_id = str(c.chunk_id)
+        current_ids.add(point_id)
+        body = f"{c.header}\n\n{c.text}" if c.header else c.text
+        fingerprint = sha256_hex(json.dumps([model.name, model.version, body]))
+        if have.get(point_id) != fingerprint:
+            new.append((c, body, fingerprint))
     for i in range(0, len(new), SLICE):
         batch = new[i : i + SLICE]
-        vectors = embed([f"{c.header}\n\n{c.text}" if c.header else c.text for c in batch])
+        vectors = embed([body for _, body, _ in batch])
         if not client.collection_exists(name):
             client.create_collection(
                 name,
@@ -57,7 +94,7 @@ def index_chunks(
                 },
             )
             client.create_payload_index(name, "document_id", models.PayloadSchemaType.KEYWORD)
-        client.upsert(
+        result = client.upsert(
             name,
             [
                 models.PointStruct(
@@ -72,6 +109,7 @@ def index_chunks(
                         "content_hash": c.content_hash,
                         "text": c.text,
                         "header": c.header,
+                        "embedding_fingerprint": fingerprint,
                         **(
                             edgar[c.document_id].model_dump(mode="json")
                             if c.document_id in edgar
@@ -79,7 +117,19 @@ def index_chunks(
                         ),
                     },
                 )
-                for c, v in zip(batch, vectors, strict=True)
+                for (c, _, fingerprint), v in zip(batch, vectors, strict=True)
             ],
+            wait=True,
         )
+        if result.status != models.UpdateStatus.COMPLETED:
+            raise RuntimeError(f"{name}: replacement upsert did not complete ({result.status})")
+
+    # Keep old points until every replacement batch has been written successfully.
+    obsolete = sorted(have.keys() - current_ids)
+    for i in range(0, len(obsolete), SLICE):
+        result = client.delete(name, models.PointIdsList(points=obsolete[i : i + SLICE]), wait=True)
+        if result.status != models.UpdateStatus.COMPLETED:
+            raise RuntimeError(
+                f"{name}: obsolete point deletion did not complete ({result.status})"
+            )
     return len(new)

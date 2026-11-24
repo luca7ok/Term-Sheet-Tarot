@@ -80,9 +80,9 @@ def build_server(deps_factory: Callable[[], Deps] = default_deps) -> MCPServer:
     # shortcut: async tools keep sqlite on one thread but block the loop while embedding
     mcp = MCPServer("term-sheet-tarot")
 
-    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
     async def ingest_document(path: str, document_id: str | None = None) -> IngestResult:
-        """Parse, chunk, embed and index one .htm/.html/.txt file."""
+        """Parse, chunk and index an upload, replacing its prior chunks for the same document ID."""
         d = deps()
         p = Path(path).resolve()
         # the server must not read arbitrary files on its host, only what was uploaded
@@ -93,7 +93,9 @@ def build_server(deps_factory: Callable[[], Deps] = default_deps) -> MCPServer:
         document_id = document_id or f"upload-{sha256_hex(p.read_bytes())[:12]}"
         parsed, _ = parse_and_store(d.store, p, document_id, DocumentSource.UPLOAD)
         chunks = chunk(parsed, d.variant, d.count_tokens)
-        embedded = index_chunks(d.qdrant, chunks, d.embed, {})
+        embedded = index_chunks(
+            d.qdrant, chunks, d.embed, {}, variant=d.variant, document_ids=[document_id]
+        )
         return IngestResult(
             document_id=document_id,
             chunks=len(chunks),
