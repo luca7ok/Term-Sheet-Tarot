@@ -5,7 +5,16 @@ description = "Turns a venture term sheet into a grounded risk table and a three
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "httpx>=0.28.1",
+    "mcp>=2.3",
+    "networkx>=3.7",
     "pydantic>=2.14.3",
+    "qdrant-client>=1.20.0",
+    "tokenizers>=0.23.3",
+]
+
+[project.optional-dependencies]
+embed = [
+    "sentence-transformers>=6.3.0",
 ]
 
 [dependency-groups]
