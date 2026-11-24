@@ -88,13 +88,20 @@ C3 (LLM context) and C4 (late chunking) wait for E1 in Week 8.
 
 <!-- coderabbit-ai-generated:v1 -->
 
-<!-- coderabbit-ai-generated-section:v1:ea15aac7fbb2f1fc6f25a2b2a5c1e0547fd5bb973180eed37e7970aefbd6f078 -->
+<!-- coderabbit-ai-generated-section:v1:0c80843cd0ad0af7ffe143ab58e36cf007bbf82bc68153cb464f2884b50d517c -->
 
 CLI ingestion and the MCP server serialize writes to each collection using filesystem locks.
 They default to `~/.cache/tarot/index-locks` for processes running as the same user. If writers run
 under different users or in separate containers or hosts, set `TAROT_INDEX_LOCK_DIR` for every writer
-to the same writable directory on a filesystem that supports shared `flock` locks. Do not run
-concurrent writers if they cannot share this directory.
+to the same directory on a filesystem that supports shared `flock` locks. Every writer must be able
+to write to the directory and open all existing lock files for append.
+
+For writers using different accounts, put them in the same group and give that group ownership of
+the lock directory. Use mode `2770` on the directory so new files inherit its group, and start
+each writer with umask `0007` so new lock files are group writable. Before starting concurrent
+writers, check that any existing lock files belong to the shared group and are group writable.
+Keep the files in place so every writer locks the same file. Run writers one at a time if they
+cannot share the directory and its lock files.
 
 <!-- /coderabbit-ai-generated:v1 -->
 
