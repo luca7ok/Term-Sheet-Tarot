@@ -19,14 +19,12 @@ from tarot.schemas import (
 )
 
 DB_PATH = Path("data/tarot.db")
-PARSER_VERSION = "stdlib-regex-2"  # bump when parsing output changes, forces a re-parse
+PARSER_VERSION = "stdlib-regex-3"  # bump when parsing output changes, forces a re-parse
 BLOCK_TAGS = {
     "p",
     "div",
     "br",
     "tr",
-    "td",
-    "th",
     "li",
     "table",
     "center",
@@ -37,6 +35,7 @@ BLOCK_TAGS = {
     "h5",
     "h6",
 }
+CELL_TAGS = {"td", "th"}
 # Article lines carry only a number (title may follow on the next line); sections need a
 # capitalised title and a full stop so "pursuant to Section 4.2 hereof" does not match.
 HEADING_RE = re.compile(
@@ -71,20 +70,30 @@ class _Stripper(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.parts: list[str] = []
         self.skip = 0
+        self.after_cell = False
 
     def handle_starttag(self, tag, attrs):
+        self.after_cell = False
         if tag in ("script", "style"):
             self.skip += 1
         elif tag in BLOCK_TAGS:
             self.parts.append("\n")
+        elif tag in CELL_TAGS:
+            self.parts.append(" ")
 
     def handle_endtag(self, tag):
+        self.after_cell = tag in CELL_TAGS
         if tag in ("script", "style"):
             self.skip -= 1
         elif tag in BLOCK_TAGS:
             self.parts.append("\n")
+        elif tag in CELL_TAGS:
+            self.parts.append(" ")
 
     def handle_data(self, data):
+        if self.after_cell and not data.strip():
+            return  # Formatting between cells must not split a row.
+        self.after_cell = False
         if not self.skip:
             self.parts.append(data)
 

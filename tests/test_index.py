@@ -1,4 +1,6 @@
 import hashlib
+import subprocess
+import sys
 
 import pytest
 from qdrant_client import QdrantClient, models
@@ -108,3 +110,47 @@ def test_failed_replacement_keeps_old_points_until_retry(tmp_path, monkeypatch):
     assert ids() == chunk_ids(updated + b)
     assert index_chunks(client, [], embed, {}, variant=variant, document_ids=["a"]) == 0
     assert ids() == chunk_ids(b)
+
+
+def test_reindex_holds_process_lock_during_snapshot_and_mutations(tmp_path, monkeypatch):
+    lock_dir = tmp_path / "locks"
+    monkeypatch.setenv("TAROT_INDEX_LOCK_DIR", str(lock_dir))
+    client, embed = QdrantClient(":memory:"), FakeEmbedder()
+    variant = ChunkingVariant.C1
+    index_chunks(client, chunks_for(tmp_path, "a", variant), embed, {})
+    lock_path = lock_dir / "chunks_c1.lock"
+    probe = """
+import fcntl
+import sys
+with open(sys.argv[1], "a") as file:
+    try:
+        fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        sys.exit(1)
+"""
+    observed = []
+
+    def check_lock(operation):
+        def wrap(*args, **kwargs):
+            assert (
+                subprocess.run(
+                    [sys.executable, "-c", probe, str(lock_path)], check=False
+                ).returncode
+                == 1
+            )
+            observed.append(operation.__name__)
+            return operation(*args, **kwargs)
+
+        return wrap
+
+    for method in ("scroll", "upsert", "delete"):
+        monkeypatch.setattr(client, method, check_lock(getattr(client, method)))
+
+    path = tmp_path / "changed.txt"
+    path.write_text("New terms")
+    updated = chunk(parse_file(path, "a", DocumentSource.UPLOAD), variant, lambda s: len(s.split()))
+    assert index_chunks(client, updated, embed, {}) == 1
+    assert observed == ["scroll", "upsert", "delete"]
+    assert (
+        subprocess.run([sys.executable, "-c", probe, str(lock_path)], check=False).returncode == 0
+    )

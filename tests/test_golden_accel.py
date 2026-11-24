@@ -106,3 +106,5 @@ def test_g2_skips_conflicting_factoids_but_preserves_unambiguous_ones(caplog):
     assert {r["question"] for r in factoids} == {"Is the liquidation preference participating?"}
     assert {r["expected_answer"] for r in factoids} == {"No, non-participating."}
     assert "review manually" in caplog.text
+    assert not any(r["question_type"] == "benchmark" for r in rows)
+    assert "compare with the NVCA default?" in caplog.text

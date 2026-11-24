@@ -61,3 +61,19 @@ def test_adjacent_html_cells_are_separated(tmp_path):
     )
     parsed = parse_file(path, "d", DocumentSource.UPLOAD)
     assert parsed.text.split() == ["Series", "Amount", "A", "1x"]
+
+
+def test_table_heading_stays_on_one_line_and_rows_stay_separate(tmp_path):
+    path = tmp_path / "table.html"
+    path.write_text(
+        "<table><tr><th>Section 1.5</th>\n  <th>Liquidation.</th></tr>"
+        "<tr><td>Series A</td><td>1x</td></tr></table>"
+    )
+    parsed = parse_file(path, "d", DocumentSource.UPLOAD)
+    assert parsed.text.splitlines() == ["Section 1.5 Liquidation.", "", "Series A 1x"]
+    (heading,) = parsed.headings
+    assert (
+        heading.title
+        == parsed.text[heading.span.start : heading.span.end]
+        == "Section 1.5 Liquidation."
+    )

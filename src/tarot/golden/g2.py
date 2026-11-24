@@ -95,19 +95,23 @@ def generate(
     rows = []
     for doc in sorted(gold):
         ordered = sorted(gold[doc], key=lambda x: (x.span.start, x.span.end))
-        factoids = [[(q, f(g.clause)) for q, f in FACTOID[g.clause.clause_type]] for g in ordered]
+        candidates = [
+            [("factoid", q, f(g.clause)) for q, f in FACTOID[g.clause.clause_type]]
+            + [("benchmark", *_benchmark(g))]
+            for g in ordered
+        ]
         answers: dict[str, set[str]] = defaultdict(set)
-        for questions in factoids:
-            for question, answer in questions:
+        for questions in candidates:
+            for _, question, answer in questions:
                 answers[question].add(answer)
         # G1 records attributes and offsets but has no structured series scope.
         for question, choices in answers.items():
             if len(choices) > 1:
                 log.warning("%s: conflicting answers for %r; review manually", doc, question)
-        for g, questions in zip(ordered, factoids, strict=True):
-            qa = [("factoid", q, answer) for q, answer in questions if len(answers[q]) == 1]
-            qa.append(("benchmark", *_benchmark(g)))
-            for kind, q, answer in qa:
+        for g, questions in zip(ordered, candidates, strict=True):
+            for kind, q, answer in questions:
+                if len(answers[q]) > 1:
+                    continue
                 rows.append(
                     {
                         "id": f"g2-gen-{len(rows) + 1:04d}",

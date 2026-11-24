@@ -1,5 +1,9 @@
 import json
-from collections.abc import Callable, Iterable
+import os
+from collections.abc import Callable, Iterable, Iterator
+from contextlib import contextmanager
+from fcntl import LOCK_EX, flock
+from pathlib import Path
 
 from qdrant_client import QdrantClient, models
 
@@ -48,6 +52,18 @@ def _existing(client: QdrantClient, name: str, documents: set[str]) -> dict[str,
             return have
 
 
+@contextmanager
+def _collection_write_lock(name: str) -> Iterator[None]:
+    lock_dir = Path(
+        os.environ.get("TAROT_INDEX_LOCK_DIR", Path.home() / ".cache/tarot/index-locks")
+    )
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    # Keep the file in place so a waiter and a new writer always lock the same inode.
+    with (lock_dir / f"{name}.lock").open("a") as lock_file:
+        flock(lock_file, LOCK_EX)
+        yield
+
+
 def index_chunks(
     client: QdrantClient,
     chunks: list[Chunk],
@@ -61,6 +77,7 @@ def index_chunks(
     """Index a complete chunk set for each supplied document, in one variant.
 
     Pass document_ids and variant to also reconcile documents that produced no chunks.
+    All processes writing to the collection must share the same TAROT_INDEX_LOCK_DIR.
     """
     if chunks and variant is None:
         variant = chunks[0].variant
@@ -71,6 +88,19 @@ def index_chunks(
         raise ValueError("index_chunks requires one chunking variant")
     name = f"chunks_{variant}"
     model = EMBEDDING_MODEL if embedding_model is None else embedding_model
+    with _collection_write_lock(name):
+        return _index_locked(client, name, documents, chunks, embed, edgar, model)
+
+
+def _index_locked(
+    client: QdrantClient,
+    name: str,
+    documents: set[str],
+    chunks: list[Chunk],
+    embed: Embedder,
+    edgar: dict[str, EdgarMetadata],
+    model: ComponentVersion,
+) -> int:
     have = _existing(client, name, documents)
     new = []
     current_ids = set()
