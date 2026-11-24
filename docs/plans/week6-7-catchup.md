@@ -86,10 +86,6 @@ C3 (LLM context) and C4 (late chunking) wait for E1 in Week 8.
 - [ ] `python -m tarot.ingest data/raw/edgar` parses, chunks, embeds, upserts and writes a `Manifest` to `data/manifests/<snapshot_id>.json`.
 - [ ] Evidence. Against the docker-compose Qdrant, the point count equals the manifest `chunk_count`, and a second run leaves the count and the snapshot ID unchanged.
 
-<!-- coderabbit-ai-generated:v1 -->
-
-<!-- coderabbit-ai-generated-section:v1:0c80843cd0ad0af7ffe143ab58e36cf007bbf82bc68153cb464f2884b50d517c -->
-
 CLI ingestion and the MCP server serialize writes to each collection using filesystem locks.
 They default to `~/.cache/tarot/index-locks` for processes running as the same user. If writers run
 under different users or in separate containers or hosts, set `TAROT_INDEX_LOCK_DIR` for every writer
@@ -102,8 +98,6 @@ each writer with umask `0007` so new lock files are group writable. Before start
 writers, check that any existing lock files belong to the shared group and are group writable.
 Keep the files in place so every writer locks the same file. Run writers one at a time if they
 cannot share the directory and its lock files.
-
-<!-- /coderabbit-ai-generated:v1 -->
 
 Sparse vectors and fusion are Week 8. The collections can be rebuilt from SQLite, so adding them later costs a re-index and no migration.
 

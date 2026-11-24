@@ -108,25 +108,27 @@ def generate(
         for question, choices in answers.items():
             if len(choices) > 1:
                 log.warning("%s: conflicting answers for %r; review manually", doc, question)
+        emitted: dict[str, dict] = {}
         for g, questions in zip(ordered, candidates, strict=True):
             for kind, q, answer in questions:
                 if len(answers[q]) > 1:
                     continue
-                rows.append(
-                    {
-                        "id": f"g2-gen-{len(rows) + 1:04d}",
-                        "question": q,
-                        "question_type": kind,
-                        "document_id": doc,
-                        "expected_answer": answer,
-                        "supporting_spans": [
-                            {"chunk_id": None, "start": g.span.start, "end": g.span.end}
-                        ],
-                        "answerable": True,
-                        "dataset_version": dataset_version,
-                        "corpus_snapshot": corpus_snapshot,
-                    }
-                )
+                span = {"chunk_id": None, "start": g.span.start, "end": g.span.end}
+                if q in emitted:  # several series agree: one row citing every span
+                    emitted[q]["supporting_spans"].append(span)
+                    continue
+                emitted[q] = {
+                    "id": f"g2-gen-{len(rows) + 1:04d}",
+                    "question": q,
+                    "question_type": kind,
+                    "document_id": doc,
+                    "expected_answer": answer,
+                    "supporting_spans": [span],
+                    "answerable": True,
+                    "dataset_version": dataset_version,
+                    "corpus_snapshot": corpus_snapshot,
+                }
+                rows.append(emitted[q])
     return rows
 
 
@@ -138,7 +140,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--corpus-snapshot", required=True)
     a = p.parse_args(argv)
     rows = generate(
-        from_export(json.loads(Path(a.export).read_text())), a.dataset_version, a.corpus_snapshot
+        from_export(json.loads(Path(a.export).read_text(encoding="utf-8"))),
+        a.dataset_version,
+        a.corpus_snapshot,
     )
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     Path(a.out).write_text("".join(json.dumps(r) + "\n" for r in rows))

@@ -112,6 +112,7 @@ def test_failed_replacement_keeps_old_points_until_retry(tmp_path, monkeypatch):
     assert ids() == chunk_ids(b)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="fcntl locks are POSIX only")
 def test_reindex_holds_process_lock_during_snapshot_and_mutations(tmp_path, monkeypatch):
     lock_dir = tmp_path / "locks"
     monkeypatch.setenv("TAROT_INDEX_LOCK_DIR", str(lock_dir))

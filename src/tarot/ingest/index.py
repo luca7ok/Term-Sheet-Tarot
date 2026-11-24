@@ -2,12 +2,16 @@ import json
 import os
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
-from fcntl import LOCK_EX, flock
 from pathlib import Path
 
 from qdrant_client import QdrantClient, models
 
 from tarot.schemas import Chunk, ChunkingVariant, ComponentVersion, EdgarMetadata, sha256_hex
+
+try:
+    from fcntl import LOCK_EX, flock
+except ImportError:  # Windows has no fcntl
+    flock = None
 
 Embedder = Callable[[list[str]], list[list[float]]]
 MODEL = "Qwen/Qwen3-Embedding-0.6B"
@@ -60,7 +64,8 @@ def _collection_write_lock(name: str) -> Iterator[None]:
     lock_dir.mkdir(parents=True, exist_ok=True)
     # Keep the file in place so a waiter and a new writer always lock the same inode.
     with (lock_dir / f"{name}.lock").open("a") as lock_file:
-        flock(lock_file, LOCK_EX)
+        if flock:  # shortcut: no lock on Windows, run one writer at a time there
+            flock(lock_file, LOCK_EX)
         yield
 
 

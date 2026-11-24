@@ -4,6 +4,7 @@ import pytest
 from test_golden import task
 
 from tarot.golden import g2, prelabel, prelabel_recall
+from tarot.golden.labelstudio import from_export
 from tarot.ingest.parse import parse_file
 from tarot.ontology.clauses import ClauseType
 from tarot.schemas import DocumentSource
@@ -108,3 +109,13 @@ def test_g2_skips_conflicting_factoids_but_preserves_unambiguous_ones(caplog):
     assert "review manually" in caplog.text
     assert not any(r["question_type"] == "benchmark" for r in rows)
     assert "compare with the NVCA default?" in caplog.text
+
+
+def test_g2_series_that_agree_share_one_row():
+    a = (0, 10, LP.value, {"multiple": 1, "participating": False})
+    b = (12, 20, LP.value, {"multiple": 1, "participating": True})
+    rows = g2.generate(from_export([task("d", "x" * 40, a, b)]), "v", "s")
+    multiple = [r for r in rows if "multiple" in r["question"]]
+    assert len(multiple) == 1
+    assert [s["start"] for s in multiple[0]["supporting_spans"]] == [0, 12]
+    assert not any("participating" in r["question"] for r in rows)

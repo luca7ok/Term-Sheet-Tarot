@@ -60,7 +60,7 @@ def kappa(export_a: list[dict], export_b: list[dict]) -> dict:
 def main() -> None:
     if len(sys.argv) != 3:
         sys.exit("usage: python -m tarot.golden.kappa a.json b.json")
-    res = kappa(*(json.loads(Path(p).read_text()) for p in sys.argv[1:]))
+    res = kappa(*(json.loads(Path(p).read_text(encoding="utf-8")) for p in sys.argv[1:]))
     ok = "PASS" if res["overall"] >= 0.7 else "FAIL"
     print(f"overall kappa {res['overall']:.3f} ({ok}, gate 0.7)")
     for t, k in res["per_type"].items():
